@@ -1,0 +1,48 @@
+// Preprocess Pipeline
+digraph {
+	edge_attr="color=\"#cccccc\", arrowsize=\"0.8\"" graph_attr="pad=\"0.5\", bgcolor=\"#fdfdfd\"" node_attr="shape=box, style=\"filled,rounded\", color=\"#aaaaaa\", fontname=\"Helvetica\", fontsize=\"10\", penwidth=\"1.5\"" rankdir=TB splines=ortho
+	A [label="🧬 Step 1:
+Load 2401-Gene List
+(Input: genes_2401_df.csv)
+(Output: genes list)" fillcolor="#ffe4e1"]
+	B [label="🔗 Step 2:
+Load PPI & Normalize
+(Input: string_network)
+(Output: W_norm 2401×2401)" fillcolor="#e6f7ff"]
+	C [label="💊 Step 3:
+Load & Transpose
+Drug–Target Matrix
+(Input: combine_drug_target_matrix.csv)
+(Output: df_drug 2401×N)" fillcolor="#fff0b3"]
+	D [label="🚀 Step 4:
+Run RWR on W_norm
+(Input: df_drug, W_norm)
+(Output: df_drug_rwr 2401×N)" fillcolor="#d9e6d0"]
+	E [label="🧫 Step 5a:
+Load Dependency
+(Input: new_gene_dependencies_35.csv)
+(Output: dep 2401×35)" fillcolor="#ffe6f2"]
+	F [label="🌱 Step 5b:
+Load Expression
+(Input: processed_expression_raw_norm.csv)
+(Output: expr 2401×35)" fillcolor="#e8e8ff"]
+	G [label="📊 Step 6:
+Load & Filter Synergy
+(Input: synergy_score.csv)
+(Output: syn 16 369 rows)" fillcolor="#ffecd1"]
+	H [label="🧩 Step 7:
+Assemble Feature Matrix X & y
+(Input: df_drug_rwr, dep, expr, syn)
+(Output: X 32 738×9608, y 32 738×1)" fillcolor="#e1ffe6"]
+	I [label="💾 Step 8:
+Save X_reproduce.npy
+& y_reproduce.pkl" fillcolor="#f0f0f0"]
+	A -> B
+	B -> C
+	C -> D
+	D -> E
+	E -> F
+	F -> G
+	G -> H
+	H -> I
+}
