@@ -1,0 +1,2 @@
+model,use_cv,test_mse,test_mae,test_r2,test_pearson,test_spearman
+TransSynergy,False,270.63507,10.428805,0.49255374462885615,0.706686789858717,0.6994656825699238
