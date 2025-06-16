@@ -199,7 +199,7 @@ def shap_feature_importance(topk: int = 20):
         plt.title(f"Top {topk} SHAP Scores | {block_name}")
         plt.xlabel("Mean |SHAP value|")
         plt.tight_layout()
-        out = f"results/shap_top{topk}_{block_name}.png"
+        out = f"results/SHAP/shap_top{topk}_{block_name}.png"
         plt.savefig(out, dpi=200)
         plt.close()
         print(f"[POST] Saved {block_name} SHAP top-{topk} plot → '{out}'")
@@ -226,7 +226,7 @@ def shap_feature_importance(topk: int = 20):
     )
     plt.title("SHAP Summary Beeswarm Plot (Top 20 Features)")
     plt.tight_layout()
-    out = "results/shap_summary_beeswarm.png"
+    out = "results/SHAP/shap_summary_beeswarm.png"
     plt.savefig(out, bbox_inches="tight")
     print(f"[POST] Saved → {out}")
 
@@ -248,28 +248,46 @@ def shap_feature_importance(topk: int = 20):
             "shap": values
         }).sort_values("shap", ascending=False)
 
+        rnk_rev = pd.DataFrame({
+            "gene": gene_list,
+            "shap": -values  # Reverse the SHAP values for GSEA
+        }).sort_values("shap", ascending=False)
+        print("[DEBUG] rnk_rev shape:", rnk_rev.shape)               # 应该是 (n_genes, 2)
+        print("[DEBUG] rnk_rev columns:", rnk_rev.columns.tolist())   # 应该是 ['gene','shap']
+        print(rnk_rev.head(5))
+
+        rnk_series = rnk_rev.set_index("gene")["shap"]
+        rnk_nonzero = rnk_series[rnk_series != 0.0]
+        if rnk_nonzero.empty:
+            print(f"[WARN] All SHAP values are zero for {block_name}, skipping GSEA.")
+            continue
+
+
         # Call gseapy.prerank
         pre_res = gp.prerank(
-            rnk=rnk,
+            rnk=rnk_nonzero,
             gene_sets="data/gene_sets/c6.all.v7.5.1.symbols.gmt",     #  MSigDB Oncogenic Signatures C6 .gmt file path
             processes=4,
             permutation_num=100,        # Number of permutations, can be adjusted based on data volume
-            outdir=f"results/gsea_{block_name}", 
+            outdir=f"results/SA-GSEA/gsea_{block_name}_rev", 
             format='png',
             seed=cfg.TRANSYNERGY_PARAMS["seed"],
-            verbose=True
+            verbose=True,
+            min_size=1,
+            max_size=5000
         )
+        print(f"[POST] Saved reversed GSEA results for {block_name} → results/SA-GSEA/gsea_{block_name}_rev")
 
         # Save top 10 significant pathways to CSV English:
         df_term = pre_res.res2d.reset_index().rename(columns={"index":"Term"})
-        out_csv = f"results/gsea_{block_name}_top10.csv"
+        out_csv = f"results/SA-GSEA/gsea_{block_name}_top10.csv"
         df_term.head(10).to_csv(out_csv, index=False)
         print(f"[POST] Saved GSEA results for {block_name} → {out_csv}")
 
     print("[POST] SA‐GSEA complete.")
 
     for block_name in ["RWR_drugA", "RWR_drugB", "Dependency", "Expression"]:
-        csv_path = f"results/gsea_{block_name}_top10.csv"
+        csv_path = f"results/SA-GSEA/gsea_{block_name}_top10.csv"
         df = pd.read_csv(csv_path)
         # 1) 统一小写列名
         df.columns = df.columns.str.lower()
@@ -286,7 +304,7 @@ def shap_feature_importance(topk: int = 20):
         plt.ylabel("")
         plt.title(f"GSEA Top10 NES | {block_name}")
         plt.tight_layout()
-        out_bar = f"results/gsea_{block_name}_NES_bar.png"
+        out_bar = f"results/SA-GSEA/gsea_{block_name}_NES_bar.png"
         plt.savefig(out_bar, dpi=150)
         plt.close()
         print(f"[POST] Saved GSEA NES barplot → {out_bar}")
@@ -295,25 +313,20 @@ def shap_feature_importance(topk: int = 20):
         size_cols = [c for c in df.columns if 'size' in c]
         if size_cols and 'fdr' in df.columns:
             size_col = size_cols[0]
-            hue_vals = -np.log10(df['fdr'])
+            df['neg_log10_fdr'] = -np.log10(df['fdr'])
             plt.figure(figsize=(6,4))
             sns.scatterplot(
                 x="nes", y="term",
                 size=size_col, sizes=(50,300),
-                hue=hue_vals, palette="viridis",
-                legend='brief', data=df
+                hue="neg_log10_fdr", palette="viridis",
+                data=df, legend='brief'
             )
-            plt.xlabel("Normalized Enrichment Score (NES)")
-            plt.ylabel("")
-            plt.legend(loc="lower right", title="-log10(FDR)")
-            plt.title(f"GSEA Bubble Plot | {block_name}")
+            plt.xlabel("NES")
+            plt.legend(title="-log10(FDR)")
+            plt.title(f"GSEA Bubble | {block_name}")
             plt.tight_layout()
-            out_bubble = f"results/gsea_{block_name}_bubble.png"
-            plt.savefig(out_bubble, dpi=150)
+            plt.savefig(f"results/SA-GSEA/gsea_{block_name}_bubble.png", dpi=150)
             plt.close()
-            print(f"[POST] Saved GSEA bubble plot → {out_bubble}")
-        else:
-            print(f"[WARN] No size/fdr columns in {csv_path}, skipping bubble plot.")
 
 def lime_feature_importance(model, X_all, feature_names, explain_size=10, topk=20):
     """
@@ -331,7 +344,7 @@ def lime_feature_importance(model, X_all, feature_names, explain_size=10, topk=2
         fig = exp.as_pyplot_figure()
         fig.suptitle(f"LIME sample {i}", y=1.02)
         fig.tight_layout()
-        fn = f"results/lime_sample_{i}.png"
+        fn = f"results/LIME/lime_sample_{i}.png"
         fig.savefig(fn, dpi=150)
         plt.close(fig)
         print(f"[XAI][LIME] Saved → {fn}")
@@ -400,9 +413,12 @@ if __name__ == "__main__":
     if args.xai in ('shap','all'):
         shap_feature_importance(topk=cfg.TRANSYNERGY_PARAMS.get("topk",20))
     if args.xai in ('lime','all'):
-        lime_feature_importance(model, X_all, feature_names,
-                                explain_size=cfg.TRANSYNERGY_PARAMS.get("lime_n",10),
-                                topk=cfg.TRANSYNERGY_PARAMS.get("topk",20))
+        lime_feature_importance(
+            model, 
+            X_all, 
+            feature_names,
+            explain_size=cfg.TRANSYNERGY_PARAMS.get("lime_n",10),
+            topk=cfg.TRANSYNERGY_PARAMS.get("topk",20))
     if args.xai in ('anchor','all'):
         anchor_feature_importance(model, X_all, feature_names,
                                   explain_size=cfg.TRANSYNERGY_PARAMS.get("anchor_n",10))
